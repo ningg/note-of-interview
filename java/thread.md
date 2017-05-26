@@ -202,7 +202,7 @@ CountDownLatch 是计数器, 线程完成一个就记一个,就像报数一样, 
 1. `execute()`：无任务返回值；
 1. `submit()`：捕获任务返回值，Future 对象。
 
-## Shutdown和shutdownNow的区别
+## shutdown和shutdownNow的区别
 
 **shutdown()**：标记关闭线程池，会执行完所有已提交的 task
 
@@ -248,6 +248,8 @@ ThreadLocal 是做什么用的？
 * ThreadLocalMap 的 `Entry[]` 数组，ThreadLocal 变量是`弱引用`，每次 GC 时，会尝试回收 ThreadLocal 变量；
 * ThreadLocalMap，仍然有内存泄漏的风险，因为，只有在 ThreadLocalMap 调用 get()、set() 方法时，才会尝试回收 `Entry[]` 对象，但，可能一直不会调用 get\set 方法；
 
+![](/assets/java/threadLocal-in-mem.png)
+
 补充：
 
 关于强引用（Strong）、软引用（Soft）、弱引用（Weak）、虚引用（Phantom）：
@@ -258,64 +260,113 @@ ThreadLocal 是做什么用的？
 * **虚引用**：不影响对象的生命周期，**每次 GC** 时，**都会回收**，虚引用用于在 GC 回收对象时，获取一个**系统通知**。
 
 
+## 线程的状态
+
+Java 中，定义了 5 种线程状态：
+
+1. **New 新建**：创建后，尚未启动
+2. **RUNNABLE 可运行状态**：对应 OS 中 `运行`与`就绪` 2 种状态
+4. **WAITING 无限等待**：不占用 CPU 资源，需要`显式唤醒`，notify()、notifyAll()；
+5. **TIME_WAITING 超时等待**：不占用 CPU 资源，一定时间后，可以自动唤醒；
+6. **BLOCKED 阻塞状态**：等待`对象锁`，也有`超时阻塞`
+6. **TERMINATED	 结束状态**：线程已经执行结束
+
+![](/assets/java/thread-state-flow.png)
+
 ## 同步
 
 同步就是协同步调，按预定的先后次序进行运行。
 
 ## sleep() 和 wait() 区别
 
-答：sleep()方法是线程类（Thread）的静态方法，导致此线程暂停执行指定时间，将执行机会给其他线程，但是监控状态依然保持，到时后会自动恢复（线程回到就绪（ready）状态），因为调用 sleep 不会释放对象锁。wait() 是 Object 类的方法，对此对象调用 wait()方法导致本线程放弃对象锁(线程暂停执行)，进入等待此对象的等待锁定池，只有针对此对象发出 notify 方法（或 notifyAll）后本线程才进入对象锁定池准备获得对象锁进入就绪状态。
+几点：
+
+1. **所属对象不同**：
+	* `sleep()`，是 Thread 的静态方法
+	* `wait()`，是 Object 的方法
+2. **释放资源不同**：
+	* `sleep()`，释放 `CPU 资源`；
+	* `wait()`，释放`对象锁`，引发当前线程释放 `CPU 资源`，需要同一个对象执行 notify() 或 notifyAll() 唤醒；
+
 
 ## sleep() 和 yield() 区别
-① sleep() 方法给其他线程运行机会时**不考虑线程的优先级**，因此会给低优先级的线程以运行的机会；yield() 方法**只会给相同优先级或更高优先级**的线程以运行的机会；
-② 线程执行 sleep() 方法后转入**阻塞**（blocked）状态，而执行 yield() 方法后转入**就绪（ready）**状态；
-③ sleep() 方法声明抛出InterruptedException，而 yield() 方法没有声明任何异常；
-④ sleep() 方法比 yield() 方法（跟操作系统相关）具有更好的可移植性。
 
-## 线程同步相关的方法。
-**wait()**:使一个线程处于等待（阻塞）状态，并且释放所持有的对象的锁；
-**sleep()**:使一个正在运行的线程处于睡眠状态，是一个静态方法，调用此方法要捕捉InterruptedException 异常；
-**notify()**:唤醒一个处于等待状态的线程，当然在调用此方法的时候，并不能确切的唤醒某一个等待状态的线程，而是由JVM确定唤醒哪个线程，而且与优先级无关；
-**notityAll()**:唤醒所有处入等待状态的线程，注意并不是给所有唤醒线程一个对象的锁，而是让它们竞争；
+几方面：
+
+1. 线程优先级：
+	* sleep()，不考虑线程的优先级，释放 CPU 资源
+	* yeild()，只给相同优先级或更高优先级线程，让出 CPU 资源
+2. 可移植性：sleep() 通用性更强，不同 OS 上支持更友好
+
+
+
+
+## 线程同步相关的方法
+
+
+1. **wait()**:使一个线程处于等待（阻塞）状态，并且释放所持有的对象的锁，InterruptedException 异常；
+1. **sleep()**:使一个正在运行的线程处于睡眠状态，是一个静态方法，调用此方法要捕捉InterruptedException 异常；
+1. **notify()**:唤醒一个处于等待状态的线程，当然在调用此方法的时候，并不能确切的唤醒某一个等待状态的线程，而是由JVM确定唤醒哪个线程，而且与优先级无关；
+1. **notityAll()**:唤醒所有处入等待状态的线程，注意并不是给所有唤醒线程一个对象的锁，而是让它们竞争；
 
 ## 什么是线程池（thread pool）
+
 答：在面向对象编程中，创建和销毁对象是很费时间的，因为创建一个对象要获取内存资源或者其它更多资源。在 Java 中更是如此，虚拟机将试图跟踪每一个对象，以便能够在对象销毁后进行垃圾回收。所以提高服务程序效率的一个手段就是尽可能减少创建和销毁对象的次数，特别是一些很耗资源的对象创建和销毁，这就是"池化资源"技术产生的原因。线程池顾名思义就是事先创建若干个可执行的线程放入一个池（容器）中，需要的时候从池中获取线程不用自行创建，使用完毕不需要销毁线程而是放回池中，从而减少创建和销毁线程对象的开销。
 
 http://www.cnblogs.com/dolphin0520/p/3932921.html
 
 ## ConcurrentHashMap实现原理
-ConcurrentHashMap和Hashtable主要区别就是围绕着锁的粒度以及如何锁。
-Hashtabl在竞争激烈的环境下表现效率低下的原因是一把锁锁住整张表，导致所有线程同时竞争一个锁。ConcurrentHashMap采用分段锁，每把锁锁住容器中的一个Segment。那么多线程访问容器里不同的Segment的数据时线程就不会存在竞争，从而有效提高并发访问效率。首先是将数据分层多个Segment存储，并为每个Segment分配一把锁，当一个线程范围其中一段数据时，其他线程可以访问其他段的数据。
+
+HashMap：非线程安全的
+
+ConcurrentHashMap 和 Hashtable 主要区别：
+
+* `锁的粒度`
+	* ConcurrentHashMap：分段锁，锁住 segment；
+	* Hashtable：锁住整个 segment；
+* `如何锁`
+
+Hashtable 在竞争激烈的环境下表现效率低下的原因是一把锁锁住整张表，导致所有线程同时竞争一个锁。
+ConcurrentHashMap采用分段锁，每把锁锁住容器中的一个Segment。那么多线程访问容器里不同的Segment的数据时线程就不会存在竞争，从而有效提高并发访问效率。首先是将数据分层多个Segment存储，并为每个Segment分配一把锁，当一个线程范围其中一段数据时，其他线程可以访问其他段的数据。
 
 数据结构：
+
 ConcurrentHashMap内部是有Segment数组和HashEntry数组组成。一个ConcurrentHashMapMap里包含一个Segment数组，而Segment的结构和HashMap一样，里面是由一个数组和链表结构组成，所以一个Segment内部包含一个HashEntry数组。每个HashEntry是一个链表结构，对于HashEntry数组进行修改时首先需要获取与它对应的Segment锁。默认情况下有16个Segment
 
 Segment的定位:
 使用Wang/Jenkins hash变种算法对元素的hashCode进行一次再散列，目的是为了减少散列冲突。
 
-ConcurrentHashMap的操作:
-1.) get
+ConcurrentHashMap 的操作:
+
+### get 
+
+1. 不加锁：原因
+	* segment部分：通过 Unsafe 读取了最新的（volitale） segments 列表
+	* segment内部：volitale 的 `HashEntry[] table`
+	* HashEntry部分：HashEntry 中 `value` 和 `next` 是 volatile 的（key 是 final 的）
+	* 新元素，追加在`拉链`的头部
+2. 数组拉链，逐个遍历
+
 get操作实现非常简单高效。先经过一次在散列，然后用这个散列值通过散列运算定位到Segment，再通过散列算法定位到元素。get之所以高效是因为整个get过程不需要加锁，除非读到空值才会加锁重读。实现该技术的技术保证是保证HashEntry是不可变的。
+
 第一步是访问count变量，这是一个volatile变量，由于所有的修改操作在进行结构修改时都会在最后一步写count 变量，通过这种机制保证get操作能够得到几乎最新的结构更新。对于非结构更新，也就是结点值的改变，由于HashEntry的value变量是 volatile的，也能保证读取到最新的值。接下来就是根据hash和key对hash链进行遍历找到要获取的结点，如果没有找到，直接访回null。
+
 对hash链进行遍历不需要加锁的原因在于链指针next是final的。但是头指针却不是final的，这是通过getFirst(hash)方法返回，也就是存在 table数组中的值。这使得getFirst(hash)可能返回过时的头结点，例如，当执行get方法时，刚执行完getFirst(hash)之后，另一个线程执行了删除操作并更新头结点，这就导致get方法中返回的头结点不是最新的。这是可以允许，通过对count变量的协调机制，get能读取到几乎最新的数据，虽然可能不是最新的。要得到最新的数据，只有采用完全的同步。
+
 2.) put
 该方法也是在持有段锁(锁定当前segment)的情况下执行的，这当然是为了并发的安全，修改数据是不能并发进行的，必须得有个判断是否超限的语句以确保容量不足时能够rehash。首先根据计算得到的散列值定位到segment及该segment中的散列桶中。接着判断是否存在同样一个key的结点，如果存在就直接替换这个结点的值。否则创建一个新的结点并添加到hash链的头部，这时一定要修改modCount和count的值，同样修改count的值一定要放在最后一步。
+
 3）remove
 HashEntry中除了value不是final的，其它值都是final的，这意味着不能从hash链的中间或尾部添加或删除节点，因为这需要修改next 引用值，所有的节点的修改只能从头部开始。对于put操作，可以一律添加到Hash链的头部。但是对于remove操作，可能需要从中间删除一个节点，这就需要将要删除节点的前面所有节点整个复制一遍，最后一个节点指向要删除结点的下一个结点。
 首先定位到要删除的节点e。如果不存在这个节点就直接返回null，否则就要将e前面的结点复制一遍，尾结点指向e的下一个结点。e后面的结点不需要复制，它们可以重用。
+
 4) size()
+
 每个Segment都有一个count变量，是一个volatile变量。当调用size方法时，首先先尝试2次通过不锁住segment的方式统计各个Segment的count值得总和，如果两次值不同则将锁住整个ConcurrentHashMap然后进行计算。
+
 参见《java并发编程的艺术》P156
 http://www.cnblogs.com/ITtangtang/p/3948786.html
 
-## 线程的几种可用状态
-线程在运行周期里有6中不同的状态。
-1. New 新建
-2. RUNNABLE 运行状态,操作系统中运行与就绪两种状态统称运行中
-3. BLOCKED 阻塞状态
-4. WAITING	等待状态
-5. TIME_WAITING 超时等待
-6. TERMINATED	终止状态
 
 ## 同步方法和同步代码块的区别是什么
 1. 同步方法只能锁定当前对象或class对象， 而同步方法块可以使用其他对象、当前对象及当前对象的class作为锁。
@@ -431,8 +482,6 @@ AIO与BIO的区别
     }
 
 
-个人公众号(欢迎关注)：<br>
-![](/assets/weix_gongzhonghao.jpg)
 
 
 
